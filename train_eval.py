@@ -8,9 +8,8 @@ import statistics
 
 from typing import List, Tuple
 
-from sklearn.feature_extraction import text  # type: ignore
-from sklearn import linear_model  # type: ignore
-from sklearn import preprocessing
+from sklearn.feature_extraction import text
+from sklearn import dummy, linear_model, preprocessing
 
 
 TRAIN_TSV = "data/train/*.tsv"
@@ -30,6 +29,7 @@ def extract_features(path: str) -> Tuple[List[str], List[str]]:
 
 def main() -> None:
     logging.basicConfig(format="%(levelname)s %(message)s", level="INFO")
+    baseline_correct: List[int] = []
     correct: List[int] = []
     size: List[int] = []
     for train_path in glob.iglob(TRAIN_TSV):
@@ -37,16 +37,21 @@ def main() -> None:
         vectorizer = text.CountVectorizer()
         encoder = preprocessing.LabelEncoder()
         x = vectorizer.fit_transform(feature_vectors)
+        baseline = dummy.DummyClassifier()
+        baseline.fit(x, y)
         model = linear_model.LogisticRegression(penalty="l1", C=10, solver="liblinear")
         model.fit(x, y)
         test_path = train_path.replace("/train/", "/test/")
         feature_vectors, y = extract_features(test_path)
         x = vectorizer.transform(feature_vectors)
+        yhat_baseline = baseline.predict(x)
+        baseline_correct.append(sum(y == yhat_baseline))
         yhat = model.predict(x)
         assert len(y) == len(yhat), "mismatched lengths"
         correct.append(sum(y == yhat))
         size.append(len(y))
     # Accuracies.
+    logging.info("Micro-average baseline:\t%.4f", sum(baseline_correct) / sum(size))
     logging.info("Micro-average accuracy:\t%.4f", sum(correct) / sum(size))
     accuracies = [c / s for (c, s) in zip(correct, size)]
     logging.info("Macro-average accuracy:\t%.4f", statistics.mean(accuracies))
